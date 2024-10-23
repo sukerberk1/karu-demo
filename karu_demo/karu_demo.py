@@ -61,9 +61,7 @@ class State(rx.State):
         vectorstore = Chroma.from_documents(documents=splits, embedding=OpenAIEmbeddings())
 
         # Retrieve and generate using the relevant snippets of the blog.
-        retriever = vectorstore.as_retriever(search_type="similarity")
-
-        retrieved_docs = retriever.invoke(f"Helping a {self.prompt} business")
+        retriever = vectorstore.as_retriever(search_type="mmr")
         
         # print("Printing only selected data:")
         # print(format_docs(retrieved_docs))
