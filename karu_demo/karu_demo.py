@@ -2,19 +2,18 @@ import bs4
 from langchain import hub
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import WebBaseLoader
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
 
 from settings import *
 import reflex as rx
-import openai
+from langchain_openai import ChatOpenAI
 
+llm = ChatOpenAI(model="gpt-4o-mini", api_key=OPEN_AI_KEY, temperature=1.5)
 
-openai_client = openai.OpenAI(
-    api_key=OPEN_AI_KEY
-)
 
 def format_docs(docs):
     return "\n\n".join(doc.page_content + "\n===\n" for doc in docs)
@@ -69,21 +68,28 @@ class State(rx.State):
         # print("Printing only selected data:")
         # print(format_docs(retrieved_docs))
 
-        response = openai_client.chat.completions.create(
-            messages = [{"role": "user", "content": f"""
-            That is all the info you know: <info>{format_docs(retrieved_docs)}</info>
+        system_prompt = """
+            You are an assistant aiming to answer questions about helping a business.
+            That is all the info you know: <info>{context}</info>
             This info is in the form of sentence parts that highlight the speciality of Karu Labs company.
-            How can Karu Labs help a {self.prompt} business?
-            If there is no info about that provided, tell that you don't know.
+            If the info does not fit in the business niche, tell the user that karu cannot help these kind of business and explain why.
             Your answer must be succint and must not exceed 100 words.
             Use markdown format.
-            """}],
-            model="chatgpt-4o-latest",
-            max_tokens=680
+            """
+        
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                ("human", "{input}"),
+            ]
         )
-        self.llm_output = response.choices[0].message.content
-        self.processing, self.complete = False, True
+        question_answer_chain = create_stuff_documents_chain(llm, prompt)
+        rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
+        response = rag_chain.invoke({"input": f"How can Karu Labs help a {self.prompt} business?"})
+        self.llm_output = response["answer"]
+
+        self.processing, self.complete = False, True
         vectorstore.delete_collection()
 
 
