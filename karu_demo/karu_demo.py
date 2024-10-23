@@ -74,7 +74,7 @@ class State(rx.State):
             This info is in the form of sentence parts that highlight the speciality of Karu Labs company.
             If the info does not fit in the business niche, tell the user that karu cannot help these kind of business and explain why.
             Your answer must be succint and must not exceed 100 words.
-            Use markdown format.
+            Use markdown format. Make the key words in your answer bold.
             """
         
         prompt = ChatPromptTemplate.from_messages(
@@ -129,4 +129,4 @@ def index():
 
 # Add state and page to the app.
 app = rx.App()
-app.add_page(index, title="Reflex:DALL-E")
+app.add_page(index, title="Karu assistant")
