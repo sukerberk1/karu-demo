@@ -97,16 +97,16 @@ def index():
                 State.complete,
                 rx.vstack(
                     rx.markdown(State.llm_output),
-                    width="28em",
+                    width="22em",
                 ),
             ),
             rx.heading("Karu assistant", font_size="1.5em"),
             rx.flex(
                 rx.box("How can Karu Labs help my "),
                 rx.input(
-                placeholder="[insert domain here] business?",
+                placeholder="e.g. fishing",
                 on_blur=State.set_prompt,
-                width="10em",
+                width="8em",
                 ),
                 rx.box("business?"),
                 spacing="2",
@@ -115,7 +115,7 @@ def index():
             rx.button(
                 "Get an answer!", 
                 on_click=State.get_answer,
-                width="28em",
+                width="22em",
                 loading=State.processing
             ),
             align="center",
