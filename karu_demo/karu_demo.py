@@ -1,3 +1,12 @@
+import bs4
+from langchain import hub
+from langchain_chroma import Chroma
+from langchain_community.document_loaders import WebBaseLoader
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_openai import OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from settings import *
 import reflex as rx
 import openai
@@ -13,43 +22,59 @@ openai_client = openai.OpenAI(
 class State(rx.State):
     """The app state."""
 
+    _info = ""
     prompt = ""
-    image_url = ""
+    llm_output = ""
     processing = False
     complete = False
 
-    def get_image(self):
+    def get_answer(self):
         """Get the image from the prompt."""
         if self.prompt == "":
             return rx.window_alert("Prompt Empty")
 
         self.processing, self.complete = True, False
         yield
-        response = openai_client.images.generate(
-            prompt=self.prompt, n=1, size="1024x1024", model="dall-e-2"
+        response = openai_client.completions.create(
+            prompt=f"""
+            That is all the info you know: <info>{self._info}</info>
+            How can Karu Labs help a {self.prompt} business?
+            If there is no info about that provided, tell that you don't know.
+            """, 
+            model="gpt-3.5-turbo-instruct",
+            max_tokens=680
         )
-        self.image_url = response.data[0].url
+        self.llm_output = response.choices[0].text
         self.processing, self.complete = False, True
 
 
 def index():
     return rx.center(
         rx.vstack(
-            rx.heading("DALL-E", font_size="1.5em"),
-            rx.input(
-                placeholder="Enter a prompt..",
-                on_blur=State.set_prompt,
-                width="25em",
-            ),
-            rx.button(
-                "Generate Image", 
-                on_click=State.get_image,
-                width="25em",
-                loading=State.processing
-            ),
             rx.cond(
                 State.complete,
-                rx.image(src=State.image_url, width="20em"),
+                rx.vstack(
+                    rx.markdown(State.llm_output),
+                    width="28em",
+                ),
+            ),
+            rx.heading("Karu assistant", font_size="1.5em"),
+            rx.flex(
+                rx.box("How can Karu Labs help my "),
+                rx.input(
+                placeholder="[insert domain here] business?",
+                on_blur=State.set_prompt,
+                width="10em",
+                ),
+                rx.box("business?"),
+                spacing="2",
+                align="center"
+            ),
+            rx.button(
+                "Get an answer!", 
+                on_click=State.get_answer,
+                width="28em",
+                loading=State.processing
             ),
             align="center",
         ),
