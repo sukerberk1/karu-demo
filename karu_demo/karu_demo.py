@@ -13,9 +13,7 @@ import openai
 
 
 openai_client = openai.OpenAI(
-    api_key=OPEN_AI_KEY,
-    organization=OPEN_AI_ORG,
-    project=OPEN_AI_PROJ
+    api_key=OPEN_AI_KEY
 )
 
 
@@ -29,23 +27,51 @@ class State(rx.State):
     complete = False
 
     def get_answer(self):
-        """Get the image from the prompt."""
+        """Get the answer"""
         if self.prompt == "":
             return rx.window_alert("Prompt Empty")
-
+        
         self.processing, self.complete = True, False
         yield
-        response = openai_client.completions.create(
-            prompt=f"""
-            That is all the info you know: <info>{self._info}</info>
+        loader = WebBaseLoader(
+        web_paths=("https://www.karulabs.ai/",),
+        bs_kwargs=dict(
+            parse_only=bs4.SoupStrainer(
+                class_=("h2-heading-2", "paragraph-regular-3", "h2-heading", "paragraph-regular-2")
+                )
+            ),
+        )
+        docs = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=40)
+        splits = text_splitter.split_documents(docs)
+        vectorstore = Chroma.from_documents(documents=splits, embedding=OpenAIEmbeddings())
+
+        # Retrieve and generate using the relevant snippets of the blog.
+        retriever = vectorstore.as_retriever(search_type="similarity")
+        prompt = hub.pull("rlm/rag-prompt")
+
+        retrieved_docs = retriever.invoke(f"Helping a {self.prompt} business")
+
+        def format_docs(docs):
+            return "\n\n".join(doc.page_content for doc in docs)
+        
+        print(format_docs(retrieved_docs))
+
+        response = openai_client.chat.completions.create(
+            messages = [{"role": "user", "content": f"""
+            That is all the info you know: <info>{format_docs(retrieved_docs)}</info>
             How can Karu Labs help a {self.prompt} business?
             If there is no info about that provided, tell that you don't know.
-            """, 
-            model="gpt-3.5-turbo-instruct",
+            Your answer must be succint and must not exceed 100 words.
+            Use markdown format.
+            """}],
+            model="chatgpt-4o-latest",
             max_tokens=680
         )
-        self.llm_output = response.choices[0].text
+        self.llm_output = response.choices[0].message.content
         self.processing, self.complete = False, True
+
+        vectorstore.delete_collection()
 
 
 def index():
